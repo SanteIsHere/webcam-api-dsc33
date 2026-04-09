@@ -9,6 +9,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from google import genai
 from PIL import Image
 from dotenv import load_dotenv
+from datetime import datetime  # To capture date and time
+import requests  # To interact with OpenWeatherMap API
 
 app = FastAPI(title="Webcam Snapshot Describer")
 load_dotenv()
@@ -16,8 +18,12 @@ load_dotenv()
 # -----------------------------
 # Camera manager
 # -----------------------------
+
+
 class Camera:
-    def __init__(self, index: int = 0, width: Optional[int] = None, height: Optional[int] = None):
+    def __init__(
+        self, index: int = 0, width: Optional[int] = None, height: Optional[int] = None
+    ):
         self.index = index
         self.cap = cv2.VideoCapture(index)
 
@@ -69,9 +75,12 @@ def get_gemini_client():
         raise RuntimeError("GEMINI_API_KEY is not set")
     return genai.Client()
 
+
 # -----------------------------
 # FastAPI lifecycle
 # -----------------------------
+
+
 @app.on_event("startup")
 def startup_event():
     global camera
@@ -81,15 +90,19 @@ def startup_event():
         # Keep app alive, but camera endpoints will fail until fixed
         print(f"Camera startup warning: {e}")
 
+
 @app.on_event("shutdown")
 def shutdown_event():
     global camera
     if camera is not None:
         camera.release()
 
+
 # -----------------------------
 # Endpoints
 # -----------------------------
+
+
 @app.get("/")
 def root():
     return {
@@ -101,9 +114,11 @@ def root():
         },
     }
 
+
 @app.get("/health")
 def health():
     return {"camera_ready": camera is not None}
+
 
 @app.get("/snapshot.jpg")
 def snapshot_jpg():
@@ -115,6 +130,7 @@ def snapshot_jpg():
         return StreamingResponse(BytesIO(jpeg), media_type="image/jpeg")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/describe")
 def describe_snapshot():
@@ -128,6 +144,19 @@ def describe_snapshot():
         pil_img = camera.get_pil_image()
         client = get_gemini_client()
 
+        # Request weather data using OWeatherAPI
+        city = "New Haven"
+        payload = {"q": city, "APPID": OW_API_KEY}
+        ow_req = requests.get(
+            "https://api.openweathermap.org/data/2.5/weather", params=payload
+        )
+        ow_weather_data = ow_req.json()["weather"][0]
+        ow_temp_data = ow_req.json()["main"]
+
+        # Function for K -> F temp conversion
+        def k_to_f(k):
+            return (k - 273.15) * 1.8 + 32
+
         response = client.models.generate_content(
             model="gemini-3-flash-preview",
             contents=[
@@ -140,7 +169,11 @@ def describe_snapshot():
 
         return JSONResponse(
             {
-                "description": response.text
+                "description": response.text,
+                "city": "New Haven",
+                "datetime": datetime.now().strftime("%H:%M:%S, %Y-%m-%d"),
+                "temperature": k_to_f(ow_temp_data["temp"]),
+                "conditions": ow_weather_data["description"],
             }
         )
     except Exception as e:
