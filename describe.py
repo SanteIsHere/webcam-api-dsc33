@@ -144,14 +144,23 @@ def describe_snapshot():
         pil_img = camera.get_pil_image()
         client = get_gemini_client()
 
-        # Request weather data using OWeatherAPI
+        # Get OWeather API key from env
+        OW_API_KEY = os.environ.get("OW_API_KEY")
+
+        # print(OW_API_KEY)
+
+        # # Request weather data using OWeatherAPI
         city = "New Haven"
         payload = {"q": city, "APPID": OW_API_KEY}
         ow_req = requests.get(
             "https://api.openweathermap.org/data/2.5/weather", params=payload
         )
+
+        # print(ow_req.json())
         ow_weather_data = ow_req.json()["weather"][0]
         ow_temp_data = ow_req.json()["main"]
+
+        # print(ow_weather_data, ow_temp_data)
 
         # Function for K -> F temp conversion
         def k_to_f(k):
@@ -172,7 +181,7 @@ def describe_snapshot():
                 "description": response.text,
                 "city": "New Haven",
                 "datetime": datetime.now().strftime("%H:%M:%S, %Y-%m-%d"),
-                "temperature": k_to_f(ow_temp_data["temp"]),
+                "temperature": f"{k_to_f(ow_temp_data['temp']):.0f}F",
                 "conditions": ow_weather_data["description"],
             }
         )
