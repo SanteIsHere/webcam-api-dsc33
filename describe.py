@@ -20,48 +20,35 @@ load_dotenv()
 # -----------------------------
 
 
+from picamera2 import Picamera2
+
 class Camera:
-    def __init__(
-        self, index: int = 0, width: Optional[int] = None, height: Optional[int] = None
-    ):
-        self.index = index
-        self.cap = cv2.VideoCapture(index)
-
-        if not self.cap.isOpened():
-            raise RuntimeError(f"Could not open webcam at index {index}")
-
-        if width:
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        if height:
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-
+    def __init__(self, index: int = 0, width: int = 1280, height: int = 720):
+        # Initialize the modern Picamera2 driver instead of cv2.VideoCapture
+        self.picam2 = Picamera2()
+        config = self.picam2.create_video_configuration(main={"size": (width, height)})
+        self.picam2.configure(config)
+        self.picam2.start()
         self.lock = threading.Lock()
 
     def read_frame(self):
         with self.lock:
-            ok, frame = self.cap.read()
-            if not ok or frame is None:
-                raise RuntimeError("Failed to read frame from webcam")
-            return frame
+            # Returns a NumPy array compatible with your existing OpenCV logic
+            return self.picam2.capture_array()
 
     def get_jpeg_bytes(self) -> bytes:
         frame = self.read_frame()
         ok, buf = cv2.imencode(".jpg", frame)
-        if not ok:
-            raise RuntimeError("Failed to encode frame as JPEG")
         return buf.tobytes()
 
     def get_pil_image(self) -> Image.Image:
         frame = self.read_frame()
-        # OpenCV is BGR; PIL expects RGB
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        return Image.fromarray(rgb)
+        # Picamera2 outputs RGB by default, so no cvtColor needed
+        return Image.fromarray(frame)
 
     def release(self):
         with self.lock:
-            if self.cap is not None:
-                self.cap.release()
-
+            self.picam2.stop()
 
 camera: Optional[Camera] = None
 

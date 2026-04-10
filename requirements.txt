@@ -4,3 +4,4 @@ opencv-python
 google-genai 
 pillow
 python-dotenv
+picamera2 
