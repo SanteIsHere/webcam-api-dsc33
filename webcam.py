@@ -1,23 +1,34 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse, Response
+from picamera2 import Picamera2
 import cv2
 import time
 
 app = FastAPI()
 
-# Open default webcam (0)
-camera = cv2.VideoCapture(0)
+# 1. Initialize PiCamera2
+picam2 = Picamera2()
 
-# Optional: set resolution
-camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+# 2. Configure the camera resolution 
+# This replaces cv2.CAP_PROP_FRAME_WIDTH and HEIGHT
+config = picam2.create_preview_configuration(main={"size": (1280, 720)})
+picam2.configure(config)
+
+# 3. Start the camera in the background
+picam2.start()
 
 def get_frame():
-    success, frame = camera.read()
-    if not success:
+    try:
+        # Capture a frame as a numpy array
+        frame = picam2.capture_array()
+        
+        # PiCamera2 returns RGB by default, but OpenCV needs BGR to encode correctly.
+        # Without this step, your red and blue colors will be swapped!
+        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        return frame_bgr
+    except Exception as e:
+        print(f"Error capturing frame: {e}")
         return None
-    return frame
-
 
 def generate_frames():
     while True:
@@ -26,6 +37,7 @@ def generate_frames():
             time.sleep(0.1)
             continue
 
+        # Encode the BGR frame to JPEG
         ok, buffer = cv2.imencode(".jpg", frame)
         if not ok:
             continue
@@ -44,7 +56,7 @@ def index():
             <title>Webcam Stream</title>
         </head>
         <body>
-            <h1>FastAPI Webcam Stream</h1>
+            <h1>FastAPI Webcam Stream (PiCamera2)</h1>
             <p><a href="/snapshot" target="_blank">Open snapshot</a></p>
             <img src="/video" width="800" />
         </body>
